@@ -1,0 +1,47 @@
+param(
+    [string[]] $names = @("whole body woman","model woman","woman fashion")
+)
+
+Add-Type -AssemblyName System.Web
+$psbasename = (Split-Path $MyInvocation.InvocationName -Leaf) -replace "\.ps1$", ""
+
+function getter(){
+    $names | %{
+        $name   = $_
+        $encode = [System.Web.HttpUtility]::UrlEncode($name)
+        $url= "https://www.bing.com/images/search?FORM=HDRSC2&q=${encode}"
+        echo "target is ${name} ${url}"
+        
+        if( Test-Path ".\output\bing\${name}" ){
+            echo "already downloaded ${name}"
+            break
+        }
+
+        mkdir ".\output\bing\${name}" | Out-Null
+
+        $cnt = 0
+        $response = Invoke-WebRequest "${url}"
+        $response.Images | %{
+            $_.src
+            if( $_.width -eq "230" ){
+                $cnt++ 
+                Invoke-WebRequest $_.src -OutFile ".\output\bing\${name}\${cnt}.jpg"
+            }
+        }
+        sleep 3
+    }    
+}
+
+try{
+    getter $names
+}
+catch{
+    if ([System.Diagnostics.EventLog]::SourceExists($PsBaseName) -eq $false){
+        New-Eventlog -LogName Application -Source $PsBaseName
+    }
+    Write-EventLog -LogName Application -EntryType Error -Source $psbasename -EventID 100 -Message $error[0].Exception
+    sleep 5
+    exit 2
+}
+
+exit 0
